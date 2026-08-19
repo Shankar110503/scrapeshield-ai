@@ -1,4 +1,4 @@
-from .models import FieldSpec, HealthReport
+from models import FieldSpec, HealthReport
 
 def check_health(rows, schema):
     if not rows:
