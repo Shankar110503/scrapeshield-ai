@@ -1,49 +1,102 @@
-import os, time, requests
-BASE="https://api.brightdata.com"
+import os
+import time
+import requests
+
+BASE = "https://api.brightdata.com"
+
 
 class BrightDataClient:
     def __init__(self):
-        self.token=os.getenv("BRIGHT_DATA_API_TOKEN")
-        self.collector=os.getenv("BRIGHT_DATA_COLLECTOR_ID")
+        self.token = os.getenv("BRIGHT_DATA_API_TOKEN")
+        self.collector = os.getenv("BRIGHT_DATA_COLLECTOR_ID")
+
         if not self.token or not self.collector:
-            raise RuntimeError("Set BRIGHT_DATA_API_TOKEN and BRIGHT_DATA_COLLECTOR_ID.")
+            raise RuntimeError(
+                "Set BRIGHT_DATA_API_TOKEN and BRIGHT_DATA_COLLECTOR_ID."
+            )
+
     @property
     def headers(self):
-        return {"Authorization":f"Bearer {self.token}","Content-Type":"application/json"}
+        return {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
+
     def trigger(self, inputs):
-        r=requests.post(f"{BASE}/dca/trigger",params={"collector":self.collector,"queue_next":1},
-                        headers=self.headers,json=inputs,timeout=60)
+        r = requests.post(
+            f"{BASE}/dca/trigger",
+            params={
+                "collector": self.collector,
+                "queue_next": 1
+            },
+            headers=self.headers,
+            json=inputs,
+            timeout=60,
+        )
+
         r.raise_for_status()
-        return r.json()["collection_id"]
+
+        result = r.json()
+
+        if "collection_id" not in result:
+            raise RuntimeError(
+                f"Bright Data did not return collection_id: {result}"
+            )
+
+        return result["collection_id"]
+
     def dataset(self, snapshot_id):
-        r=requests.get(f"{BASE}/dca/dataset",params={"id":snapshot_id},
-                       headers=self.headers,timeout=60)
-        if r.status_code==202: return None
+        r = requests.get(
+            f"{BASE}/dca/dataset",
+            params={"id": snapshot_id},
+            headers=self.headers,
+            timeout=60,
+        )
+
+        if r.status_code == 202:
+            return None
+
         r.raise_for_status()
+
         return r.json()
+
     def collect(self, inputs, timeout=600):
-    sid = self.trigger(inputs)
-    start = time.time()
+        sid = self.trigger(inputs)
 
-    while time.time() - start < timeout:
-        data = self.dataset(sid)
+        start = time.time()
 
-        if isinstance(data, list):
-            return data, sid
+        while time.time() - start < timeout:
+            data = self.dataset(sid)
 
-        time.sleep(10)
+            if isinstance(data, list):
+                return data, sid
 
-    raise RuntimeError(
-        f"Timed out waiting for Bright Data dataset. "
-        f"Collection ID: {sid}"
-    )
-    def self_heal(self,prompt):
-        r=requests.post(f"{BASE}/dca/collectors/{self.collector}/refactor_template",
-                        headers=self.headers,json={"prompt":prompt},timeout=60)
+            time.sleep(10)
+
+        raise RuntimeError(
+            f"Timed out waiting for Bright Data dataset. "
+            f"Collection ID: {sid}"
+        )
+
+    def self_heal(self, prompt):
+        r = requests.post(
+            f"{BASE}/dca/collectors/{self.collector}/refactor_template",
+            headers=self.headers,
+            json={"prompt": prompt},
+            timeout=60,
+        )
+
         r.raise_for_status()
-        return r.json() if r.content else {"status":"started"}
+
+        return r.json() if r.content else {"status": "started"}
+
     def self_heal_progress(self):
-        r=requests.get(f"{BASE}/dca/collectors/{self.collector}/refactor_template/progress",
-                       headers=self.headers,timeout=60)
+        r = requests.get(
+            f"{BASE}/dca/collectors/{self.collector}/refactor_template/progress",
+            headers=self.headers,
+            timeout=60,
+        )
+
         r.raise_for_status()
+
         return r.json()
