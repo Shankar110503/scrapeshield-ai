@@ -21,13 +21,22 @@ class BrightDataClient:
         if r.status_code==202: return None
         r.raise_for_status()
         return r.json()
-    def collect(self, inputs, timeout=300):
-        sid=self.trigger(inputs); start=time.time()
-        while time.time()-start < timeout:
-            data=self.dataset(sid)
-            if isinstance(data,list): return data,sid
-            time.sleep(5)
-        raise RuntimeError("Timed out waiting for Bright Data dataset.")
+    def collect(self, inputs, timeout=600):
+    sid = self.trigger(inputs)
+    start = time.time()
+
+    while time.time() - start < timeout:
+        data = self.dataset(sid)
+
+        if isinstance(data, list):
+            return data, sid
+
+        time.sleep(10)
+
+    raise RuntimeError(
+        f"Timed out waiting for Bright Data dataset. "
+        f"Collection ID: {sid}"
+    )
     def self_heal(self,prompt):
         r=requests.post(f"{BASE}/dca/collectors/{self.collector}/refactor_template",
                         headers=self.headers,json={"prompt":prompt},timeout=60)
