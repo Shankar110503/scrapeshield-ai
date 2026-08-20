@@ -1,10 +1,12 @@
 from dataclasses import dataclass
 from typing import List
 
+
 @dataclass
 class FieldSpec:
     name: str
     description: str
+
 
 @dataclass
 class HealthReport:
