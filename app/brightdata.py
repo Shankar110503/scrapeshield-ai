@@ -2,19 +2,25 @@ import os
 import time
 import requests
 
+
 BASE = "https://api.brightdata.com"
 
 
 class BrightDataClient:
+
     def __init__(self):
         self.token = os.getenv("BRIGHT_DATA_API_TOKEN")
         self.collector = os.getenv("BRIGHT_DATA_COLLECTOR_ID")
 
         if not self.token:
-            raise RuntimeError("BRIGHT_DATA_API_TOKEN is not set.")
+            raise RuntimeError(
+                "BRIGHT_DATA_API_TOKEN is not set."
+            )
 
         if not self.collector:
-            raise RuntimeError("BRIGHT_DATA_COLLECTOR_ID is not set.")
+            raise RuntimeError(
+                "BRIGHT_DATA_COLLECTOR_ID is not set."
+            )
 
     @property
     def headers(self):
@@ -24,6 +30,7 @@ class BrightDataClient:
         }
 
     def trigger(self, inputs):
+
         response = requests.post(
             f"{BASE}/dca/trigger",
             params={
@@ -61,66 +68,68 @@ class BrightDataClient:
         return collection_id
 
     def dataset(self, snapshot_id):
-    response = requests.get(
-        f"{BASE}/dca/dataset",
-        params={"id": snapshot_id},
-        headers=self.headers,
-        timeout=60,
-    )
 
-    try:
-        body = response.json()
-    except Exception:
-        body = response.text
-
-    if response.status_code >= 400:
-        raise RuntimeError(
-            f"Bright Data dataset error "
-            f"{response.status_code}: {body}"
+        response = requests.get(
+            f"{BASE}/dca/dataset",
+            params={"id": snapshot_id},
+            headers=self.headers,
+            timeout=60,
         )
 
-    if isinstance(body, list):
-        return body
+        try:
+            body = response.json()
+        except Exception:
+            body = response.text
 
-    # IMPORTANT:
-    # Do not hide Bright Data's actual response.
-    if isinstance(body, dict):
-        status = body.get("status", "unknown")
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Bright Data dataset error "
+                f"{response.status_code}: {body}"
+            )
 
-        if status in {
-            "building",
-            "running",
-            "pending",
-            "starting",
-        }:
-            return None
+        if isinstance(body, list):
+            return body
 
-        if isinstance(body.get("data"), list):
-            return body["data"]
+        if isinstance(body, dict):
 
-        if isinstance(body.get("results"), list):
-            return body["results"]
+            status = body.get("status", "unknown")
+
+            if status in {
+                "building",
+                "running",
+                "pending",
+                "starting",
+            }:
+                return None
+
+            if isinstance(body.get("data"), list):
+                return body["data"]
+
+            if isinstance(body.get("results"), list):
+                return body["results"]
+
+            raise RuntimeError(
+                f"Bright Data returned unexpected dataset response: {body}"
+            )
 
         raise RuntimeError(
-            f"Bright Data returned unexpected dataset response: {body}"
+            f"Unexpected Bright Data response type: {body}"
         )
 
-    raise RuntimeError(
-        f"Unexpected Bright Data response type: {body}"
-    )
+    def collect(self, inputs, timeout=900):
 
-    def collect(self, inputs, timeout=600):
         collection_id = self.trigger(inputs)
 
         start = time.time()
 
         while time.time() - start < timeout:
+
             data = self.dataset(collection_id)
 
             if isinstance(data, list):
                 return data, collection_id
 
-            time.sleep(10)
+            time.sleep(5)
 
         raise RuntimeError(
             "Timed out waiting for Bright Data dataset. "
@@ -128,6 +137,7 @@ class BrightDataClient:
         )
 
     def self_heal(self, prompt):
+
         response = requests.post(
             f"{BASE}/dca/collectors/"
             f"{self.collector}/refactor_template",
@@ -145,6 +155,7 @@ class BrightDataClient:
         )
 
     def self_heal_progress(self):
+
         response = requests.get(
             f"{BASE}/dca/collectors/"
             f"{self.collector}/refactor_template/progress",
