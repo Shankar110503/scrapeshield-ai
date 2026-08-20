@@ -61,49 +61,53 @@ class BrightDataClient:
         return collection_id
 
     def dataset(self, snapshot_id):
-        response = requests.get(
-            f"{BASE}/dca/dataset",
-            params={"id": snapshot_id},
-            headers=self.headers,
-            timeout=60,
+    response = requests.get(
+        f"{BASE}/dca/dataset",
+        params={"id": snapshot_id},
+        headers=self.headers,
+        timeout=60,
+    )
+
+    try:
+        body = response.json()
+    except Exception:
+        body = response.text
+
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Bright Data dataset error "
+            f"{response.status_code}: {body}"
         )
 
-        try:
-            body = response.json()
-        except Exception:
-            body = response.text
+    if isinstance(body, list):
+        return body
 
-        if response.status_code >= 400:
-            raise RuntimeError(
-                f"Bright Data dataset error "
-                f"{response.status_code}: {body}"
-            )
+    # IMPORTANT:
+    # Do not hide Bright Data's actual response.
+    if isinstance(body, dict):
+        status = body.get("status", "unknown")
 
-        if isinstance(body, list):
-            return body
-
-        if isinstance(body, dict):
-            status = body.get("status")
-
-            if status in {
-                "building",
-                "running",
-                "pending",
-                "starting",
-            }:
-                return None
-
-            # Some Bright Data responses may contain the data
-            # inside a result/data field.
-            if isinstance(body.get("data"), list):
-                return body["data"]
-
-            if isinstance(body.get("results"), list):
-                return body["results"]
-
+        if status in {
+            "building",
+            "running",
+            "pending",
+            "starting",
+        }:
             return None
 
-        return None
+        if isinstance(body.get("data"), list):
+            return body["data"]
+
+        if isinstance(body.get("results"), list):
+            return body["results"]
+
+        raise RuntimeError(
+            f"Bright Data returned unexpected dataset response: {body}"
+        )
+
+    raise RuntimeError(
+        f"Unexpected Bright Data response type: {body}"
+    )
 
     def collect(self, inputs, timeout=600):
         collection_id = self.trigger(inputs)
