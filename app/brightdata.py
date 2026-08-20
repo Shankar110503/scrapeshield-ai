@@ -1,4 +1,4 @@
-import os
+    import os
 import time
 import requests
 
@@ -14,12 +14,12 @@ class BrightDataClient:
 
         if not self.token:
             raise RuntimeError(
-                "BRIGHT_DATA_API_TOKEN is not set."
+                "BRIGHT_DATA_API_TOKEN is missing."
             )
 
         if not self.collector:
             raise RuntimeError(
-                "BRIGHT_DATA_COLLECTOR_ID is not set."
+                "BRIGHT_DATA_COLLECTOR_ID is missing."
             )
 
     @property
@@ -35,7 +35,7 @@ class BrightDataClient:
             f"{BASE}/dca/trigger",
             params={
                 "collector": self.collector,
-                "queue_next": 1,
+                "queue_next": "1",
             },
             headers=self.headers,
             json=inputs,
@@ -43,26 +43,21 @@ class BrightDataClient:
         )
 
         try:
-            result = response.json()
+            body = response.json()
         except Exception:
-            result = response.text
+            body = response.text
 
         if response.status_code >= 400:
             raise RuntimeError(
                 f"Bright Data trigger error "
-                f"{response.status_code}: {result}"
+                f"{response.status_code}: {body}"
             )
 
-        if not isinstance(result, dict):
-            raise RuntimeError(
-                f"Unexpected Bright Data response: {result}"
-            )
-
-        collection_id = result.get("collection_id")
+        collection_id = body.get("collection_id")
 
         if not collection_id:
             raise RuntimeError(
-                f"Bright Data did not return collection_id: {result}"
+                f"Bright Data did not return collection_id: {body}"
             )
 
         return collection_id
@@ -71,8 +66,12 @@ class BrightDataClient:
 
         response = requests.get(
             f"{BASE}/dca/dataset",
-            params={"id": snapshot_id},
-            headers=self.headers,
+            params={
+                "id": snapshot_id
+            },
+            headers={
+                "Authorization": f"Bearer {self.token}"
+            },
             timeout=60,
         )
 
@@ -87,34 +86,19 @@ class BrightDataClient:
                 f"{response.status_code}: {body}"
             )
 
+        if isinstance(body, dict):
+
+            if body.get("status") == "building":
+                return None
+
+            raise RuntimeError(
+                f"Bright Data dataset status: {body}"
+            )
+
         if isinstance(body, list):
             return body
 
-        if isinstance(body, dict):
-
-            status = body.get("status", "unknown")
-
-            if status in {
-                "building",
-                "running",
-                "pending",
-                "starting",
-            }:
-                return None
-
-            if isinstance(body.get("data"), list):
-                return body["data"]
-
-            if isinstance(body.get("results"), list):
-                return body["results"]
-
-            raise RuntimeError(
-                f"Bright Data returned unexpected dataset response: {body}"
-            )
-
-        raise RuntimeError(
-            f"Unexpected Bright Data response type: {body}"
-        )
+        return None
 
     def collect(self, inputs, timeout=900):
 
@@ -126,7 +110,7 @@ class BrightDataClient:
 
             data = self.dataset(collection_id)
 
-            if isinstance(data, list):
+            if data is not None:
                 return data, collection_id
 
             time.sleep(5)
@@ -135,34 +119,3 @@ class BrightDataClient:
             "Timed out waiting for Bright Data dataset. "
             f"Collection ID: {collection_id}"
         )
-
-    def self_heal(self, prompt):
-
-        response = requests.post(
-            f"{BASE}/dca/collectors/"
-            f"{self.collector}/refactor_template",
-            headers=self.headers,
-            json={"prompt": prompt},
-            timeout=60,
-        )
-
-        response.raise_for_status()
-
-        return (
-            response.json()
-            if response.content
-            else {"status": "started"}
-        )
-
-    def self_heal_progress(self):
-
-        response = requests.get(
-            f"{BASE}/dca/collectors/"
-            f"{self.collector}/refactor_template/progress",
-            headers=self.headers,
-            timeout=60,
-        )
-
-        response.raise_for_status()
-
-        return response.json()
