@@ -10,10 +10,11 @@ class BrightDataClient:
         self.token = os.getenv("BRIGHT_DATA_API_TOKEN")
         self.collector = os.getenv("BRIGHT_DATA_COLLECTOR_ID")
 
-        if not self.token or not self.collector:
-            raise RuntimeError(
-                "Set BRIGHT_DATA_API_TOKEN and BRIGHT_DATA_COLLECTOR_ID."
-            )
+        if not self.token:
+            raise RuntimeError("BRIGHT_DATA_API_TOKEN is not set.")
+
+        if not self.collector:
+            raise RuntimeError("BRIGHT_DATA_COLLECTOR_ID is not set.")
 
     @property
     def headers(self):
@@ -22,112 +23,131 @@ class BrightDataClient:
             "Content-Type": "application/json",
         }
 
-    def dataset(self, snapshot_id):
-    r = requests.get(
-        f"{BASE}/dca/dataset",
-        params={"id": snapshot_id},
-        headers=self.headers,
-        timeout=60,
-    )
-
-    try:
-        body = r.json()
-    except Exception:
-        body = r.text
-
-    if r.status_code >= 400:
-        raise RuntimeError(
-            f"Bright Data dataset error {r.status_code}: {body}"
+    def trigger(self, inputs):
+        response = requests.post(
+            f"{BASE}/dca/trigger",
+            params={
+                "collector": self.collector,
+                "queue_next": 1,
+            },
+            headers=self.headers,
+            json=inputs,
+            timeout=60,
         )
 
-    if isinstance(body, list):
-        return body
+        try:
+            result = response.json()
+        except Exception:
+            result = response.text
 
-    if isinstance(body, dict):
-        if body.get("status") == "building":
-            return None
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Bright Data trigger error "
+                f"{response.status_code}: {result}"
+            )
 
-        raise RuntimeError(
-            f"Bright Data dataset status: {body}"
-        )
+        if not isinstance(result, dict):
+            raise RuntimeError(
+                f"Unexpected Bright Data response: {result}"
+            )
 
-    return None
+        collection_id = result.get("collection_id")
 
-        if "collection_id" not in result:
+        if not collection_id:
             raise RuntimeError(
                 f"Bright Data did not return collection_id: {result}"
             )
 
-        return result["collection_id"]
+        return collection_id
 
     def dataset(self, snapshot_id):
-    r = requests.get(
-        f"{BASE}/dca/dataset",
-        params={"id": snapshot_id},
-        headers=self.headers,
-        timeout=60,
-    )
-
-    try:
-        body = r.json()
-    except Exception:
-        body = r.text
-
-    if r.status_code >= 400:
-        raise RuntimeError(
-            f"Bright Data dataset error {r.status_code}: {body}"
+        response = requests.get(
+            f"{BASE}/dca/dataset",
+            params={"id": snapshot_id},
+            headers=self.headers,
+            timeout=60,
         )
 
-    if isinstance(body, list):
-        return body
+        try:
+            body = response.json()
+        except Exception:
+            body = response.text
 
-    if isinstance(body, dict):
-        if body.get("status") == "building":
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Bright Data dataset error "
+                f"{response.status_code}: {body}"
+            )
+
+        if isinstance(body, list):
+            return body
+
+        if isinstance(body, dict):
+            status = body.get("status")
+
+            if status in {
+                "building",
+                "running",
+                "pending",
+                "starting",
+            }:
+                return None
+
+            # Some Bright Data responses may contain the data
+            # inside a result/data field.
+            if isinstance(body.get("data"), list):
+                return body["data"]
+
+            if isinstance(body.get("results"), list):
+                return body["results"]
+
             return None
 
-        raise RuntimeError(
-            f"Bright Data dataset status: {body}"
-        )
-
-    return None
+        return None
 
     def collect(self, inputs, timeout=600):
-        sid = self.trigger(inputs)
+        collection_id = self.trigger(inputs)
 
         start = time.time()
 
         while time.time() - start < timeout:
-            data = self.dataset(sid)
+            data = self.dataset(collection_id)
 
             if isinstance(data, list):
-                return data, sid
+                return data, collection_id
 
             time.sleep(10)
 
         raise RuntimeError(
-            f"Timed out waiting for Bright Data dataset. "
-            f"Collection ID: {sid}"
+            "Timed out waiting for Bright Data dataset. "
+            f"Collection ID: {collection_id}"
         )
 
     def self_heal(self, prompt):
-        r = requests.post(
-            f"{BASE}/dca/collectors/{self.collector}/refactor_template",
+        response = requests.post(
+            f"{BASE}/dca/collectors/"
+            f"{self.collector}/refactor_template",
             headers=self.headers,
             json={"prompt": prompt},
             timeout=60,
         )
 
-        r.raise_for_status()
+        response.raise_for_status()
 
-        return r.json() if r.content else {"status": "started"}
+        return (
+            response.json()
+            if response.content
+            else {"status": "started"}
+        )
 
     def self_heal_progress(self):
-        r = requests.get(
-            f"{BASE}/dca/collectors/{self.collector}/refactor_template/progress",
+        response = requests.get(
+            f"{BASE}/dca/collectors/"
+            f"{self.collector}/refactor_template/progress",
             headers=self.headers,
             timeout=60,
         )
 
-        r.raise_for_status()
+        response.raise_for_status()
 
-        return r.json()
+        return response.json()
