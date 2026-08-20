@@ -22,21 +22,36 @@ class BrightDataClient:
             "Content-Type": "application/json",
         }
 
-    def trigger(self, inputs):
-        r = requests.post(
-            f"{BASE}/dca/trigger",
-            params={
-                "collector": self.collector,
-                "queue_next": 1
-            },
-            headers=self.headers,
-            json=inputs,
-            timeout=60,
+    def dataset(self, snapshot_id):
+    r = requests.get(
+        f"{BASE}/dca/dataset",
+        params={"id": snapshot_id},
+        headers=self.headers,
+        timeout=60,
+    )
+
+    try:
+        body = r.json()
+    except Exception:
+        body = r.text
+
+    if r.status_code >= 400:
+        raise RuntimeError(
+            f"Bright Data dataset error {r.status_code}: {body}"
         )
 
-        r.raise_for_status()
+    if isinstance(body, list):
+        return body
 
-        result = r.json()
+    if isinstance(body, dict):
+        if body.get("status") == "building":
+            return None
+
+        raise RuntimeError(
+            f"Bright Data dataset status: {body}"
+        )
+
+    return None
 
         if "collection_id" not in result:
             raise RuntimeError(
@@ -46,19 +61,35 @@ class BrightDataClient:
         return result["collection_id"]
 
     def dataset(self, snapshot_id):
-        r = requests.get(
-            f"{BASE}/dca/dataset",
-            params={"id": snapshot_id},
-            headers=self.headers,
-            timeout=60,
+    r = requests.get(
+        f"{BASE}/dca/dataset",
+        params={"id": snapshot_id},
+        headers=self.headers,
+        timeout=60,
+    )
+
+    try:
+        body = r.json()
+    except Exception:
+        body = r.text
+
+    if r.status_code >= 400:
+        raise RuntimeError(
+            f"Bright Data dataset error {r.status_code}: {body}"
         )
 
-        if r.status_code == 202:
+    if isinstance(body, list):
+        return body
+
+    if isinstance(body, dict):
+        if body.get("status") == "building":
             return None
 
-        r.raise_for_status()
+        raise RuntimeError(
+            f"Bright Data dataset status: {body}"
+        )
 
-        return r.json()
+    return None
 
     def collect(self, inputs, timeout=600):
         sid = self.trigger(inputs)
