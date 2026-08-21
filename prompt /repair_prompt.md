@@ -1,0 +1,1 @@
+Repair the scraper while preserving the output schema. The latest collection is missing or returning empty values for one or more expected fields. Prefer stable semantic/data-test attributes over fragile CSS classes. Validate the repaired extraction before considering the repair complete.
