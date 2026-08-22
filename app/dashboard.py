@@ -1,3 +1,12 @@
+import sys
+import os
+
+# Root directory ko Python path me add karein
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import streamlit as st
+from app.healer import AutoHealer
+
 import streamlit as st
 from app.healer import AutoHealer
 
