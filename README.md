@@ -1,27 +1,25 @@
-# ScrapeShield AI — Fixed v3
+# 🛡️ ScrapeShield AI
 
-This version fixes the Bright Data result endpoint used by the Streamlit app.
+> **Self-healing web scraping engine powered by Bright Data Scraper Studio & CLI.**
 
-## Important fix
+ScrapeShield AI automatically detects when target website layouts change, catches missing data fields, and triggers automated self-healing via `bdata scraper heal` — preventing downstream data breakage.
 
-The Scraper Studio flow is:
+---
 
-1. `POST /dca/trigger?collector=...&queue_next=1`
-2. Receive `collection_id`
-3. Poll `GET /dca/dataset?id=<collection_id>` every few seconds
-4. Continue when the API says the job is still collecting
-5. Use the returned JSON array as structured output
+## 🚀 Key Features
 
-The old version incorrectly called `/dca/get_result?collection_id=...`, which caused:
-`Bright Data dataset error 400: Missing response_id parameter`.
+* **Terminal-First Workflow**: Seamless execution via Bright Data CLI inside coding agents.
+* **Autonomous Self-Healing**: Automatically repairs broken selectors upon detecting empty or `null` extraction fields.
+* **Live Health Dashboard**: Real-time status monitoring built with Streamlit.
+* **Production API Trigger**: Collector ID (`c_*`) ready for POST requests and scheduler integration.
 
-## Streamlit
+---
 
-Main file:
+## 🛠️ Quick Start
 
-`app/dashboard.py`
+### 1. Requirements
+Ensure Node.js and Python 3.10+ are installed.
 
-Secrets:
-
-- `BRIGHT_DATA_API_TOKEN`
-- `BRIGHT_DATA_COLLECTOR_ID`
+```bash
+pip install -r requirements.txt
+npx -p @brightdata/cli bdata login
